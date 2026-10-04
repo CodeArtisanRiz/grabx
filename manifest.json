@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "GrabX",
+  "version": "1.0.0",
+  "description": "Captures zero-frame initial load animations, CSS keyframes, and transitions per domain.",
+  "permissions": ["storage", "activeTab", "tabs", "clipboardWrite"],
+  "action": {
+    "default_title": "GrabX — Activate & Record Animations"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_start"
+    }
+  ]
+}

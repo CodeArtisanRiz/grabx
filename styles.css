@@ -1,0 +1,50 @@
+/* GrabX HUD button — injected into every active-domain page */
+
+#grabx-hud-btn {
+  position: fixed !important;
+  bottom: 24px !important;
+  right: 24px !important;
+  z-index: 2147483647 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background-color: #090d16 !important;
+  color: #38bdf8 !important;
+  border: 1.5px solid #38bdf8 !important;
+  border-radius: 9999px !important;
+  padding: 10px 20px !important;
+  font-family: ui-monospace, "Cascadia Code", "Fira Code", monospace !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  letter-spacing: 0.02em !important;
+  cursor: pointer !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(56, 189, 248, 0.15) !important;
+  outline: none !important;
+  transition: transform 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease !important;
+  user-select: none !important;
+  white-space: nowrap !important;
+}
+
+#grabx-hud-btn:hover {
+  transform: translateY(-2px) scale(1.03) !important;
+  background-color: #111827 !important;
+}
+
+#grabx-hud-btn:active {
+  transform: translateY(0) scale(0.97) !important;
+}
+
+/* Success state — set via data-state="success" */
+#grabx-hud-btn[data-state="success"] {
+  border-color: #4ade80 !important;
+  color: #4ade80 !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(74, 222, 128, 0.2) !important;
+}
+
+/* Error state — set via data-state="error" */
+#grabx-hud-btn[data-state="error"] {
+  border-color: #f87171 !important;
+  color: #f87171 !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(248, 113, 113, 0.2) !important;
+}
