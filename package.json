@@ -1,0 +1,22 @@
+{
+  "name": "grabx",
+  "version": "2.0.0",
+  "description": "Extract full site DNA from any URL. Chrome extension + Playwright CLI.",
+  "type": "module",
+  "bin": {
+    "grabx": "./extract.js"
+  },
+  "scripts": {
+    "extract": "node extract.js"
+  },
+  "keywords": ["chrome-extension", "animation", "web-scraping", "design-system", "playwright"],
+  "author": "CodeArtisanRiz",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CodeArtisanRiz/grabx"
+  },
+  "dependencies": {
+    "playwright": "^1.52.0"
+  }
+}
