@@ -1,10 +1,9 @@
 #!/usr/bin/env node
-// GrabX CLI — Playwright-based site DNA extractor
+// GrabX CLI — Playwright-based full site DNA extractor
 // Usage: node extract.js <url> [options]
 //
-// Extracts the same data as the Chrome extension but runs headless.
-// Uses addInitScript to inject capture logic before page scripts run,
-// then scrolls the full page, hovers interactive elements, and exports.
+// Extracts complete design DNA: animations, design tokens, fonts, layout, assets.
+// Injects frame-0 script, performs smooth scroll & hover passes, and captures deep DOM with computed styles.
 
 import { chromium } from "playwright";
 import { writeFileSync } from "fs";
@@ -40,11 +39,6 @@ Options:
   --no-hover             Skip hover pass (faster, misses hover states)
   --viewport <WxH>       Viewport size (default: 1440x900)
   -h, --help             Show this help
-
-Examples:
-  node extract.js https://lattice.com -o lattice.json
-  node extract.js https://linear.app --viewport 1920x1080
-  node extract.js https://stripe.com | jq '.fonts'
 `);
     process.exit(0);
   }
@@ -61,9 +55,7 @@ const WAIT_MS = flags.wait || 3000;
 const SCROLL_SPEED = flags.scrollSpeed || 150;
 const VIEWPORT = flags.viewport || { width: 1440, height: 900 };
 
-// ── Init script — injected before page scripts run ──────────────────────────
-// This is the equivalent of the extension's document_start content script.
-// It captures animations from frame 0.
+// ── Frame-0 Init Script ─────────────────────────────────────────────────────
 
 const INIT_SCRIPT = `
 (() => {
@@ -88,7 +80,7 @@ const INIT_SCRIPT = `
     const parts = [];
     let current = el;
     let depth = 0;
-    while (current && current !== document.documentElement && depth < 5) {
+    while (current && current !== document.documentElement && depth < 6) {
       const tag = current.tagName.toLowerCase();
       const idAttr = current.id ? "#" + CSS.escape(current.id) : "";
       let cls = "";
@@ -209,32 +201,29 @@ const INIT_SCRIPT = `
   window.addEventListener("scroll", throttledSnapshot, { passive: true });
   window.addEventListener("mouseover", throttledSnapshot, { passive: true });
 
-  // 12-second polling window
   const poll = setInterval(snapshot, 100);
   setTimeout(() => clearInterval(poll), 12000);
   snapshot();
 })();
 `;
 
-// ── Extraction script — runs after scrolling/hovering is done ───────────────
-// This is the equivalent of buildPayload() in content.js.
+// ── Extraction Script ───────────────────────────────────────────────────────
 
 const EXTRACT_SCRIPT = `
 (() => {
   const gx = window.__grabx || { animations: new Map(), startTime: Date.now() };
 
-  // ── Style properties to capture ──
   const STYLE_PROPS = [
     "display", "flexDirection", "justifyContent", "alignItems", "gap",
     "gridTemplateColumns", "gridTemplateRows",
-    "position", "top", "right", "bottom", "left",
-    "width", "height", "maxWidth", "minHeight",
+    "position", "top", "right", "bottom", "left", "zIndex",
+    "width", "height", "maxWidth", "minWidth", "maxHeight", "minHeight",
     "padding", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
     "margin", "marginTop", "marginRight", "marginBottom", "marginLeft",
     "backgroundColor", "background", "color",
     "fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "textTransform", "textAlign",
-    "borderRadius", "border", "borderColor", "boxShadow",
-    "opacity", "transform", "overflow", "zIndex", "transition"
+    "borderRadius", "border", "borderColor", "borderWidth", "boxShadow",
+    "opacity", "transform", "overflow", "transition", "cursor", "aspectRatio"
   ];
 
   function extractComputedStyle(el) {
@@ -243,16 +232,10 @@ const EXTRACT_SCRIPT = `
       const cs = window.getComputedStyle(el);
       for (const prop of STYLE_PROPS) {
         const val = cs[prop];
-        if (val && val !== "none" && val !== "normal" && val !== "auto" &&
-            val !== "0px" && val !== "0px 0px 0px 0px" && val !== "start" &&
-            val !== "rgba(0, 0, 0, 0)" && val !== "transparent" && val !== "static" &&
-            val !== "visible" && val !== "0" && val !== "stretch" && val !== "0s" &&
-            val !== "baseline") {
+        if (val !== undefined && val !== null && val !== "") {
           result[prop] = val;
         }
       }
-      result.display = cs.display;
-      if (cs.position !== "static") result.position = cs.position;
     } catch (_) {}
     return result;
   }
@@ -262,7 +245,7 @@ const EXTRACT_SCRIPT = `
     const parts = [];
     let current = el;
     let depth = 0;
-    while (current && current !== document.documentElement && depth < 5) {
+    while (current && current !== document.documentElement && depth < 6) {
       const tag = current.tagName.toLowerCase();
       const idAttr = current.id ? "#" + CSS.escape(current.id) : "";
       let cls = "";
@@ -284,14 +267,34 @@ const EXTRACT_SCRIPT = `
     return parts.join(" > ") || "unknown";
   }
 
-  // ── DOM walker ──
+  // ── Deep DOM Walker (No depth cutoff, complete computed styles & attributes) ──
   function walkDOM(el, depth, maxDepth) {
     if (!el || depth > maxDepth) return null;
     const tag = el.tagName?.toLowerCase();
     if (!tag || ["script", "style", "noscript", "link", "meta"].includes(tag)) return null;
-    if (tag === "svg" && depth > 1) return { tag: "svg", hasContent: true };
 
-    const node = { tag };
+    if (tag === "svg" && depth > 2) {
+      const rect = el.getBoundingClientRect();
+      return {
+        tag: "svg",
+        rect: { width: Math.round(rect.width), height: Math.round(rect.height) },
+        outerHTML: el.outerHTML.slice(0, 4000)
+      };
+    }
+
+    const rect = el.getBoundingClientRect();
+    const node = {
+      tag,
+      selector: generateSelector(el),
+      rect: {
+        top: Math.round(rect.top + window.scrollY),
+        left: Math.round(rect.left + window.scrollX),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height)
+      },
+      computedStyle: extractComputedStyle(el)
+    };
+
     if (el.id) node.id = el.id;
 
     let className = el.className;
@@ -300,22 +303,25 @@ const EXTRACT_SCRIPT = `
       node.classes = className.trim().split(/\\s+/).filter(Boolean);
     }
 
-    const role = el.getAttribute("role");
-    if (role) node.role = role;
-    const ariaLabel = el.getAttribute("aria-label");
-    if (ariaLabel) node.ariaLabel = ariaLabel;
+    // Attributes
+    const attrs = {};
+    ["src", "srcset", "alt", "href", "target", "type", "loading", "title", "role", "aria-label", "viewBox"].forEach(attr => {
+      const val = el.getAttribute(attr);
+      if (val) attrs[attr] = val;
+    });
+    if (Object.keys(attrs).length) node.attributes = attrs;
 
-    if (depth <= 3) node.computedStyle = extractComputedStyle(el);
+    // Direct text vs full text
+    const directText = Array.from(el.childNodes)
+      .filter(n => n.nodeType === Node.TEXT_NODE)
+      .map(n => n.textContent.trim())
+      .filter(Boolean)
+      .join(" ");
+    if (directText) node.directText = directText;
 
-    if (/^h[1-6]$/.test(tag)) {
-      node.textPreview = (el.textContent || "").trim().slice(0, 300);
-    } else if (depth >= 2) {
-      const directText = Array.from(el.childNodes)
-        .filter(n => n.nodeType === Node.TEXT_NODE)
-        .map(n => n.textContent.trim())
-        .filter(Boolean)
-        .join(" ");
-      if (directText) node.textPreview = directText.slice(0, 200);
+    if (/^h[1-6]$/.test(tag) || tag === "p" || tag === "button" || tag === "a" || tag === "span") {
+      const fullText = el.textContent?.trim();
+      if (fullText) node.text = fullText.slice(0, 1000);
     }
 
     const children = Array.from(el.children)
@@ -326,13 +332,13 @@ const EXTRACT_SCRIPT = `
     return node;
   }
 
-  // ── Sections ──
+  // ── Sections Extractor ──
   function extractSections() {
     const sections = [];
     let topLevel = document.querySelectorAll(
       "body > header, body > nav, body > main, body > footer, body > aside, " +
       "body > section, body > article, body > div, " +
-      "main > section, main > div, main > article"
+      "main > header, main > section, main > div, main > article, main > footer"
     );
     const elements = topLevel.length > 0 ? topLevel : (document.body ? document.body.children : []);
 
@@ -354,10 +360,19 @@ const EXTRACT_SCRIPT = `
                 el.id || (tag + "-section");
       }
 
+      const rect = el.getBoundingClientRect();
       const section = {
         label,
         selector: generateSelector(el),
-        tag
+        tag,
+        rect: {
+          top: Math.round(rect.top + window.scrollY),
+          left: Math.round(rect.left + window.scrollX),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height)
+        },
+        computedStyle: extractComputedStyle(el),
+        tree: walkDOM(el, 0, 14)
       };
       if (el.id) section.id = el.id;
 
@@ -367,24 +382,12 @@ const EXTRACT_SCRIPT = `
         section.classes = className.trim().split(/\\s+/).filter(Boolean);
       }
 
-      section.computedStyle = extractComputedStyle(el);
-      section.tree = walkDOM(el, 0, 4);
-
-      try {
-        const rect = el.getBoundingClientRect();
-        section.boundingBox = {
-          top: Math.round(rect.top + window.scrollY),
-          height: Math.round(rect.height),
-          width: Math.round(rect.width)
-        };
-      } catch (_) {}
-
       sections.push(section);
     }
     return sections;
   }
 
-  // ── Stylesheet scraper (recursive) ──
+  // ── Stylesheets Scraper ──
   function walkRules(rules, collector) {
     if (!rules) return;
     for (const rule of rules) {
@@ -431,7 +434,7 @@ const EXTRACT_SCRIPT = `
     };
   }
 
-  // ── Design tokens ──
+  // ── Design Tokens ──
   function extractDesignTokens() {
     const vars = [];
     const seen = new Set();
@@ -459,7 +462,7 @@ const EXTRACT_SCRIPT = `
     return { cssVariables: vars };
   }
 
-  // ── Color palette ──
+  // ── Color Palette ──
   function extractColorPalette() {
     const backgrounds = new Set(), textColors = new Set(), borderColors = new Set(), accents = new Set();
     const elements = document.querySelectorAll(
@@ -541,9 +544,9 @@ const EXTRACT_SCRIPT = `
 
     let svgCount = 0;
     document.querySelectorAll("svg").forEach(svg => {
-      if (svgCount >= 20) return;
+      if (svgCount >= 40) return;
       const rect = svg.getBoundingClientRect();
-      if (rect.width < 24 && rect.height < 24) return;
+      if (rect.width < 16 && rect.height < 16) return;
       try {
         svgs.push({
           selector: generateSelector(svg),
@@ -572,7 +575,7 @@ const EXTRACT_SCRIPT = `
     return { images, svgs, backgroundImages };
   }
 
-  // ── Head meta ──
+  // ── Head Meta ──
   function extractHeadMeta() {
     const meta = { title: document.title || "" };
     document.querySelectorAll("meta").forEach(m => {
@@ -597,11 +600,10 @@ const EXTRACT_SCRIPT = `
     return meta;
   }
 
-  // ── Build final payload ──
   const sheets = scrapeStylesheets();
   return {
     meta: {
-      tool: "GrabX CLI v2.0.0 (Playwright)",
+      tool: "GrabX CLI v2.1.0 (Playwright)",
       domain: window.location.hostname,
       url: window.location.href,
       title: document.title || "",
@@ -638,8 +640,6 @@ async function main() {
   });
 
   const page = await context.newPage();
-
-  // Inject animation capture script before anything runs (frame-0)
   await page.addInitScript(INIT_SCRIPT);
 
   process.stderr.write(`[GrabX] Navigating to ${url}\n`);
@@ -649,18 +649,16 @@ async function main() {
     process.stderr.write(`[GrabX] Navigation warning: ${err.message}\n`);
   }
 
-  // Wait for network to settle
   try {
     await page.waitForLoadState("networkidle", { timeout: 15000 });
   } catch (_) {
     process.stderr.write(`[GrabX] Network didn't fully settle, continuing...\n`);
   }
 
-  // Extra wait for JS-driven animations to start
   process.stderr.write(`[GrabX] Waiting ${WAIT_MS}ms for animations...\n`);
   await page.waitForTimeout(WAIT_MS);
 
-  // Scroll the full page slowly to trigger scroll-based animations
+  // Scroll full page smoothly
   process.stderr.write(`[GrabX] Scrolling page...\n`);
   const scrollHeight = await page.evaluate(() => document.body.scrollHeight);
   const viewportHeight = VIEWPORT.height;
@@ -672,11 +670,9 @@ async function main() {
     await page.waitForTimeout(SCROLL_SPEED);
   }
 
-  // Scroll back to top
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: "smooth" }));
   await page.waitForTimeout(500);
 
-  // Hover pass: hit buttons, links, cards, nav items
   if (!flags.noHover) {
     process.stderr.write(`[GrabX] Hovering interactive elements...\n`);
     const hoverSelectors = [
@@ -687,7 +683,7 @@ async function main() {
     for (const sel of hoverSelectors) {
       try {
         const elements = await page.$$(sel);
-        const toHover = elements.slice(0, 5); // first 5 per selector type
+        const toHover = elements.slice(0, 5);
         for (const el of toHover) {
           try {
             await el.hover({ timeout: 1000 });
@@ -696,13 +692,11 @@ async function main() {
         }
       } catch (_) {}
     }
-    // Move mouse away to reset hover states
     await page.mouse.move(0, 0);
     await page.waitForTimeout(300);
   }
 
-  // Run the extraction
-  process.stderr.write(`[GrabX] Extracting site DNA...\n`);
+  process.stderr.write(`[GrabX] Extracting deep site DNA (AST + computed styles + attributes)...\n`);
   const payload = await page.evaluate(EXTRACT_SCRIPT);
 
   await browser.close();
