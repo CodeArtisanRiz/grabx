@@ -1,11 +1,11 @@
 {
   "manifest_version": 3,
   "name": "GrabX",
-  "version": "1.0.0",
-  "description": "Captures zero-frame initial load animations, CSS keyframes, and transitions per domain.",
-  "permissions": ["storage", "activeTab", "tabs", "clipboardWrite"],
+  "version": "2.0.0",
+  "description": "Extracts full site DNA — animations, design tokens, fonts, layout, assets — for AI-assisted cloning.",
+  "permissions": ["storage", "activeTab", "tabs"],
   "action": {
-    "default_title": "GrabX — Activate & Record Animations"
+    "default_title": "GrabX — Activate & Record Site DNA"
   },
   "background": {
     "service_worker": "background.js"

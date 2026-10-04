@@ -1,86 +1,188 @@
 # GrabX
 
-A Chrome Extension (Manifest V3) that extracts all UI animations, transitions,
-easing curves, and CSS keyframes from any website — starting from frame 0
-(initial page load). Built for developers and designers who want to clone or
-study how a site animates.
+A Chrome Extension (Manifest V3) that extracts the complete design DNA from any
+website — animations, design tokens, fonts, color palette, layout structure,
+assets, and interaction states — starting from frame 0. Built so you can paste
+the output into an AI agent (Claude, Antigravity, GPT) and get a pixel-perfect
+clone or a style-matched rebuild with different content.
 
 ---
 
 ## What it captures
 
-- CSS keyframe animations (@keyframes rules from all accessible stylesheets)
-- CSS transitions (transitionrun / transitionstart events)
-- Web Animations API (WAAPI) animations — including GSAP and JS-driven motion
-- Entrance animations from frame 0 (before any scripts run, on reload)
-- Scroll-triggered and hover-triggered animations (captured as you browse)
-- Duration, delay, easing, fill mode, iteration count, direction per animation
-- Full keyframe steps with offset values
+GrabX extracts 11 categories of data from any site:
+
+    Category               What you get
+    ─────────────────────  ──────────────────────────────────────────
+    Animations             CSS keyframes, WAAPI, transitions with
+                           full timing, easing, keyframe steps
+    Design Tokens          All CSS custom properties from :root with
+                           computed values
+    Color Palette          Backgrounds, text, borders, accents — auto
+                           grouped by role
+    Fonts                  Every loaded font face with family, weight,
+                           style, source URLs, plus Google Fonts links
+    Section Layout         Recursive DOM tree (4 levels deep) with
+                           computed styles per element, heading text,
+                           semantic labels
+    Computed Styles        Top 40 CSS properties per element —
+                           layout, spacing, typography, colors, shadows
+    Breakpoints            All @media query breakpoints from stylesheets
+    Transition Rules       Declared CSS transitions that may not have
+                           fired during capture
+    Interaction States     :hover, :focus, :active rules from stylesheets
+    Assets                 Images (src, alt, dimensions), inline SVGs,
+                           background-image URLs
+    Head Meta              Title, description, viewport, OG tags,
+                           favicon, preconnects, stylesheet URLs
 
 ---
 
 ## How it works
 
-GrabX is passive by default. It does not run on every site automatically.
+GrabX is passive by default. It does not run on any site automatically.
 
-1. You navigate to any site
-2. You click the GrabX icon in the Chrome toolbar
-3. The extension sets an active flag for that domain and reloads the tab
-4. On reload, the content script runs at document_start — before the DOM
-   renders and before any site scripts execute — to capture frame-0 entrance
-   animations
-5. It continues capturing as you scroll and hover for the lifetime of the tab
-6. A floating HUD button appears at the bottom-right showing the live count
-7. Click the HUD button to copy a clean JSON payload to your clipboard
+    1. Navigate to any site
+    2. Click the GrabX icon in the Chrome toolbar
+       → green REC badge appears
+       → tab reloads to capture from frame 0
+    3. Content script runs at document_start — before DOM renders
+       and before any site scripts execute
+    4. 12-second polling window captures GSAP and JS-driven animations
+    5. Scroll and hover listeners capture post-load animations
+    6. The ⚡ GrabX (N) button appears bottom-right inside Shadow DOM
+       (isolated from page CSS, can't be hidden or styled by the site)
+    7. Click the button → full site DNA payload copied to clipboard
+    8. Paste into your AI agent of choice
 
----
-
-## Installation (manual / unpacked)
-
-GrabX is not on the Chrome Web Store. Load it as an unpacked extension:
-
-1. Download or clone this repository to your local machine
-2. Open Chrome and go to:  chrome://extensions
-3. Enable Developer mode (toggle in the top-right corner)
-4. Click "Load unpacked"
-5. Select the grabx folder (the one containing manifest.json)
-6. GrabX appears in your extensions list
-
-To pin it to the toolbar: click the puzzle piece icon next to the address bar,
-then click the pin icon next to GrabX.
+To stop recording: click the GrabX icon again. Badge clears, extension
+goes silent on that domain.
 
 ---
 
-## Usage
+## Installation
 
-    Navigate to any website
-    Click the GrabX icon in the toolbar
-      → A green REC badge appears on the icon
-      → The tab reloads to start capture from frame 0
-    Wait a moment — the ⚡ GrabX (N) button appears bottom-right
-    Browse normally — scroll, hover, interact with the page
-    When ready, click the ⚡ GrabX (N) button
-      → The full animation payload is copied to your clipboard as JSON
+GrabX is not on the Chrome Web Store. Load as an unpacked extension:
 
-To deactivate recording for the domain: click the GrabX icon again. The REC
-badge clears and the extension goes silent on that domain.
+    1. Download grabx-v2.0.0.zip from the Releases page
+       (or clone this repo)
+    2. Extract the zip
+    3. Open Chrome → chrome://extensions
+    4. Enable "Developer mode" (top-right toggle)
+    5. Click "Load unpacked"
+    6. Select the grabx folder (the one with manifest.json)
+
+Pin it: click the puzzle-piece icon next to the address bar, then
+pin GrabX.
 
 ---
 
 ## Output format
 
-The clipboard JSON has this shape:
+The clipboard JSON has this structure. Every section is designed to give
+an AI agent enough context to clone the site or build a different app
+with the same visual language.
 
     {
       "meta": {
+        "tool": "GrabX v2.0.0",
         "domain": "example.com",
+        "url": "https://example.com/",
+        "title": "Example Site",
         "exportedAt": "2025-01-01T00:00:00.000Z",
-        "captureWindowMs": 12000,
-        "totalRecorded": 14
+        "captureWindowMs": 15000,
+        "viewport": { "width": 1440, "height": 900, "devicePixelRatio": 2 },
+        "totalAnimations": 14
       },
+
+      "designTokens": {
+        "cssVariables": [
+          { "property": "--primary", "value": "#6366f1", "computed": "rgb(99, 102, 241)" },
+          { "property": "--radius", "value": "0.5rem" },
+          { "property": "--font-sans", "value": "Inter, system-ui, sans-serif" }
+        ],
+        "colorPalette": {
+          "backgrounds": ["rgb(255, 255, 255)", "rgb(15, 23, 42)"],
+          "text": ["rgb(15, 23, 42)", "rgb(148, 163, 184)"],
+          "borders": ["rgb(226, 232, 240)"],
+          "accents": ["rgb(99, 102, 241)", "rgb(16, 185, 129)"]
+        }
+      },
+
+      "fonts": {
+        "faces": [
+          {
+            "family": "Inter",
+            "weight": "400",
+            "style": "normal",
+            "status": "loaded"
+          }
+        ],
+        "externalSheets": [
+          "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700"
+        ]
+      },
+
+      "sections": [
+        {
+          "label": "Header",
+          "selector": "header",
+          "tag": "header",
+          "computedStyle": {
+            "display": "flex",
+            "justifyContent": "space-between",
+            "padding": "16px 32px",
+            "backgroundColor": "rgb(255, 255, 255)"
+          },
+          "tree": {
+            "tag": "header",
+            "children": [
+              { "tag": "nav", "classes": ["main-nav"], "children": [...] },
+              { "tag": "div", "classes": ["logo"], "children": [...] }
+            ]
+          },
+          "boundingBox": { "top": 0, "height": 72, "width": 1440 }
+        },
+        {
+          "label": "Transform your workflow",
+          "selector": "section#hero",
+          "tag": "section",
+          "id": "hero",
+          "computedStyle": {
+            "display": "flex",
+            "flexDirection": "column",
+            "alignItems": "center",
+            "gap": "24px",
+            "padding": "96px 32px",
+            "background": "linear-gradient(135deg, #0f172a, #1e1b4b)"
+          },
+          "tree": {
+            "tag": "section",
+            "id": "hero",
+            "children": [
+              {
+                "tag": "h1",
+                "textPreview": "Transform your workflow",
+                "computedStyle": {
+                  "fontSize": "64px",
+                  "fontWeight": "700",
+                  "lineHeight": "1.1",
+                  "color": "rgb(255, 255, 255)",
+                  "letterSpacing": "-0.02em"
+                }
+              },
+              { "tag": "p", "textPreview": "The fastest way to...", "computedStyle": {...} },
+              { "tag": "div", "classes": ["cta-group"], "children": [...] }
+            ]
+          },
+          "boundingBox": { "top": 72, "height": 680, "width": 1440 }
+        }
+      ],
+
       "animations": [
         {
-          "selector": "div#hero.fade-in",
+          "selector": "section#hero > h1",
+          "elementId": 4,
           "name": "fadeUp",
           "type": "CSS Keyframe Animation",
           "duration": "600ms",
@@ -93,45 +195,139 @@ The clipboard JSON has this shape:
             { "offset": 0, "opacity": "0", "transform": "translateY(20px)" },
             { "offset": 1, "opacity": "1", "transform": "translateY(0px)" }
           ],
+          "restingState": { "opacity": "1", "transform": "none", "visibility": "visible" },
+          "viewportPosition": {
+            "top": 120,
+            "left": 200,
+            "width": 1040,
+            "height": 76,
+            "viewportHeight": 900,
+            "triggerRatio": 0.133
+          },
           "capturedAt": "342ms"
         }
       ],
+
       "stylesheetKeyframes": [
         {
           "name": "fadeUp",
-          "cssText": "@keyframes fadeUp { from { ... } to { ... } }"
+          "cssText": "@keyframes fadeUp { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0); } }"
         }
-      ]
+      ],
+
+      "transitionRules": [
+        {
+          "selector": ".btn",
+          "transition": "all 0.2s ease",
+          "properties": "all",
+          "duration": "0.2s",
+          "easing": "ease",
+          "delay": "0s"
+        }
+      ],
+
+      "interactionStates": [
+        {
+          "selector": ".btn:hover",
+          "cssText": ".btn:hover { background-color: #4f46e5; transform: translateY(-1px); }"
+        },
+        {
+          "selector": "a:focus-visible",
+          "cssText": "a:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }"
+        }
+      ],
+
+      "breakpoints": [
+        "(max-width: 640px)",
+        "(max-width: 768px)",
+        "(max-width: 1024px)",
+        "(max-width: 1280px)"
+      ],
+
+      "assets": {
+        "images": [
+          { "src": "https://example.com/hero.webp", "alt": "Dashboard", "width": 1200, "height": 800 }
+        ],
+        "svgs": [
+          { "selector": "header > nav > svg", "width": 32, "height": 32, "outerHTML": "<svg ...>...</svg>" }
+        ],
+        "backgroundImages": [
+          { "selector": "section#hero", "url": "https://example.com/grain.png" }
+        ]
+      },
+
+      "headMeta": {
+        "title": "Example Site — Transform your workflow",
+        "description": "The fastest way to build products.",
+        "viewport": "width=device-width, initial-scale=1",
+        "favicon": "https://example.com/favicon.ico",
+        "ogImage": "https://example.com/og.png",
+        "themeColor": "#0f172a",
+        "preconnects": ["https://fonts.googleapis.com", "https://fonts.gstatic.com"],
+        "stylesheetUrls": ["https://example.com/styles.css"]
+      }
     }
 
 ---
 
-## Capture details
+## How to use the export with AI agents
 
-Capture method       What it catches
----------------------------------------------------------------------------
-document_start       Frame-0 entrance animations before any scripts run
-Event listeners      animationstart, animationiteration, transitionrun,
-                     transitionstart — all on capture phase
-100ms polling        12-second window after load — catches GSAP, JS-driven,
-                     deferred, and intersection-observer animations
-Scroll listener      Scroll-triggered entrance animations
-Mouseover listener   Hover-state transitions
-Stylesheet scraper   All @keyframes rules in accessible stylesheets
-                     (cross-origin sheets are skipped by browser security)
+Paste the JSON into Claude, Antigravity, GPT, or any coding AI agent with
+one of these prompts:
+
+    Clone mode (exact replica):
+    "Here is the full design DNA of [site]. Build me an exact visual
+    replica as a React/Next.js app. Use the same fonts, colors, spacing,
+    animations, and layout. Replace images with placeholders of the same
+    dimensions."
+
+    Style-match mode (different content):
+    "Here is the design DNA of [site]. I'm building [my app] with
+    different content. Use the same design system — fonts, color palette,
+    spacing scale, animation style, and interaction patterns — but with
+    my content: [describe your app]."
+
+    Animation-only mode:
+    "Here are the animations and transitions from [site]. Apply the same
+    motion language to my existing app: entrance animations, hover states,
+    scroll-triggered reveals, and easing curves."
+
+---
+
+## Capture methods
+
+    Method               What it catches           When
+    ───────────────────  ────────────────────────  ────────────────
+    document_start       Frame-0 entrance anims    Before scripts run
+    Event listeners      animationstart,           Real-time
+                         transitionrun, etc.
+                         (capture phase)
+    100ms polling        GSAP, JS-driven,          First 12 seconds
+                         deferred animations
+    Scroll listener      Scroll-triggered           On scroll
+                         entrance animations        (throttled 200ms)
+    Mouseover listener   Hover-state transitions    On hover
+                                                    (throttled 200ms)
+    Stylesheet scraper   @keyframes, transitions,   At export time
+                         :hover/:focus rules,       (+ early snapshot
+                         @media breakpoints          at 3 seconds)
+    Font API             Loaded font faces          At export time
+    Computed styles      40 CSS properties per      At export time
+                         structural element
+    DOM walker           Section tree (4 levels)    At export time
 
 ---
 
 ## Permissions
 
-Permission       Why it is needed
---------------------------------------------------------------
-storage          Store the active-domain flag between page loads
-activeTab        Read the current tab's URL on icon click
-tabs             Reload the tab after activating a domain
-clipboardWrite   Write the JSON export to the clipboard
+    Permission    Why
+    ──────────    ────────────────────────────────────────────────
+    storage       Store the active-domain flag between page loads
+    activeTab     Read the current tab's URL on icon click
+    tabs          Reload the tab after activating, re-apply badge
 
-No data ever leaves your browser. Everything is local.
+No data ever leaves your browser. Everything is local. No analytics.
+No network requests. No telemetry.
 
 ---
 
@@ -139,22 +335,73 @@ No data ever leaves your browser. Everything is local.
 
     grabx/
     ├── manifest.json    MV3 manifest — permissions, content script config
-    ├── background.js    Service worker — icon click handler, badge, reload
-    ├── content.js       Capture logic — events, polling, HUD button
-    └── styles.css       HUD button styling
+    ├── background.js    Service worker — toggle, badge, message handler
+    ├── content.js       Full extraction engine — 16 modules
+    └── styles.css       HUD host isolation (button styles in Shadow DOM)
+
+---
+
+## Bugs fixed in v2.0.0 (from v1.0.0)
+
+    - Selector collision: elements with same tag+classes no longer collide
+      (now uses nth-child + DOM path + element ID)
+    - SVG className: handles SVGAnimatedString correctly
+    - Throttled scroll/hover: 200ms throttle prevents jank on heavy pages
+    - Accurate animation types: CSSAnimation vs CSSTransition vs WAAPI
+      properly distinguished
+    - Shadow DOM HUD: button isolated from page CSS, can't be hidden
+    - Clipboard fallback: shows modal with textarea if clipboard API fails
+    - Nested @keyframes: scraper now recurses into @media/@layer/@supports
+    - Background race condition: storage access serialized with lock
+    - Badge flash: single source of truth in onUpdated, no set-before-reload
+    - Removed dead clipboardWrite permission (MV2-only, does nothing in MV3)
+    - Event target precision: animation events use e.target.getAnimations()
+    - Early keyframe snapshot: captures stylesheet keyframes at 3s in case
+      sheets are dynamically removed before export
 
 ---
 
 ## Known limitations
 
-- Cross-origin stylesheets (loaded from a different domain, CDN, etc.) cannot
-  be read due to browser CORS policy. Their @keyframes are not captured.
-- GSAP animations that use JS-only tweens (not mapped to WAAPI) appear as
-  WAAPI entries with limited keyframe data.
-- The clipboard write requires a user gesture (clicking the HUD button). This
-  is a browser security requirement and cannot be worked around.
-- Sites that use Shadow DOM may have animations on elements not reachable by
-  document.getAnimations() at the top level.
+    - Cross-origin stylesheets cannot be read (browser CORS restriction).
+      Their @keyframes, transitions, and :hover rules are not captured.
+    - GSAP tweens that don't use WAAPI internally appear with limited
+      keyframe data (start/end states only).
+    - Shadow DOM components: animations inside closed Shadow DOM roots
+      are not reachable by document.getAnimations().
+    - Computed styles are captured at export time, not at animation start.
+      If an element's style changes between capture and export, the
+      resting state reflects the later value.
+    - Maximum 20 inline SVGs captured to keep payload size reasonable.
+    - Background images using CSS gradients are captured as the full
+      gradient string, not as image URLs.
+
+---
+
+## Changelog
+
+### v2.0.0
+
+    - Full site DNA extraction: 11 data categories
+    - Section-by-section DOM structure with recursive tree (4 levels)
+    - Computed styles per element (40 CSS properties)
+    - Font extraction (document.fonts API + external sheet detection)
+    - Color palette extraction (grouped by role)
+    - CSS custom property / design token extraction
+    - Responsive breakpoint detection
+    - Transition rule scraping from stylesheets
+    - Interaction state capture (:hover, :focus, :active rules)
+    - Asset inventory (images, SVGs, background-images)
+    - Head meta extraction (OG, favicon, preconnects)
+    - Scroll-trigger context (viewport position at capture time)
+    - Shadow DOM HUD isolation
+    - Clipboard fallback modal
+    - 12 bug fixes from v1.0.0 code review
+    - Background-to-content message channel
+
+### v1.0.0
+
+    - Initial release — animation-only capture
 
 ---
 

@@ -1,45 +1,68 @@
-// GrabX — background service worker
-// Handles icon click: toggles recording state per domain, reloads tab.
+// GrabX v2.0.0 — background service worker
+// Toggles recording per domain, manages badge state.
 
-chrome.action.onClicked.addListener(async (tab) => {
+// ── Serialized storage access (prevents read-modify-write races) ────────────
+let lock = Promise.resolve();
+function withLock(fn) {
+  lock = lock.then(fn, fn);
+  return lock;
+}
+
+// ── Icon click: toggle domain ───────────────────────────────────────────────
+chrome.action.onClicked.addListener((tab) => {
+  if (!tab.url || !tab.url.startsWith("http")) return;
+
+  withLock(async () => {
+    try {
+      const url = new URL(tab.url);
+      const domain = url.hostname;
+      const { activeDomains = {} } = await chrome.storage.local.get("activeDomains");
+
+      if (activeDomains[domain]) {
+        // Deactivate
+        delete activeDomains[domain];
+        await chrome.storage.local.set({ activeDomains });
+        await chrome.action.setBadgeText({ tabId: tab.id, text: "" });
+      } else {
+        // Activate — badge will be applied by onUpdated after reload
+        activeDomains[domain] = true;
+        await chrome.storage.local.set({ activeDomains });
+        await chrome.tabs.reload(tab.id).catch(() => {});
+      }
+    } catch (err) {
+      console.error("[GrabX] Action error:", err);
+    }
+  });
+});
+
+// ── Badge state: single source of truth on tab load ─────────────────────────
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (changeInfo.status !== "complete") return;
   if (!tab.url || !tab.url.startsWith("http")) return;
 
   try {
     const url = new URL(tab.url);
-    const domain = url.hostname;
     const { activeDomains = {} } = await chrome.storage.local.get("activeDomains");
+    const domains = activeDomains || {};
 
-    if (activeDomains[domain]) {
-      // Second click — deactivate, clear badge
-      delete activeDomains[domain];
-      await chrome.storage.local.set({ activeDomains });
-      chrome.action.setBadgeText({ tabId: tab.id, text: "" });
+    if (domains[url.hostname]) {
+      await chrome.action.setBadgeText({ tabId, text: "REC" });
+      await chrome.action.setBadgeBackgroundColor({ tabId, color: "#10b981" });
     } else {
-      // First click — activate, show REC badge, reload to capture frame-0
-      activeDomains[domain] = true;
-      await chrome.storage.local.set({ activeDomains });
-      await chrome.action.setBadgeText({ tabId: tab.id, text: "REC" });
-      await chrome.action.setBadgeBackgroundColor({ tabId: tab.id, color: "#10b981" });
-      chrome.tabs.reload(tab.id);
+      await chrome.action.setBadgeText({ tabId, text: "" });
     }
   } catch (err) {
-    console.error("[GrabX] Action error:", err);
+    console.warn("[GrabX] Badge update:", err);
   }
 });
 
-// Clear badge on tab navigation away (new URL on same tab)
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status !== "complete" || !tab.url) return;
-  try {
-    const url = new URL(tab.url);
-    // Re-apply badge if domain is still active (post-reload)
+// ── Message handler: content script can request state ───────────────────────
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.type === "grabx:getState" && sender.tab) {
+    const domain = new URL(sender.tab.url).hostname;
     chrome.storage.local.get("activeDomains", ({ activeDomains = {} }) => {
-      if (activeDomains[url.hostname]) {
-        chrome.action.setBadgeText({ tabId, text: "REC" });
-        chrome.action.setBadgeBackgroundColor({ tabId, color: "#10b981" });
-      } else {
-        chrome.action.setBadgeText({ tabId, text: "" });
-      }
+      sendResponse({ active: !!(activeDomains || {})[domain] });
     });
-  } catch (_) {}
+    return true; // async sendResponse
+  }
 });
